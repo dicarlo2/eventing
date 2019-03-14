@@ -56,5 +56,14 @@ func ProvideController(ss *dispatcher.SubscriptionsSupervisor, mgr manager.Manag
 		return nil, err
 	}
 
+	// We need to force reconciliation when the NATS client disconnects.
+	err = c.Watch(&source.Channel{
+		Source: ss.ReconcileChan(),
+	}, &handler.EnqueueRequestForObject{})
+	if err != nil {
+		logger.Error("Unable to watch the reconcile Channel", zap.Error(err))
+		return nil, err
+	}
+
 	return c, nil
 }

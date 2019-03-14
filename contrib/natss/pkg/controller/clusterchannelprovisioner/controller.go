@@ -45,7 +45,7 @@ func ProvideController(mgr manager.Manager, logger *zap.Logger) (controller.Cont
 	// check the connection to NATSS
 	var err error
 	natssUrl := fmt.Sprintf(NatssUrlTmpl, utils.GetClusterDomainName())
-	if _, err := stanutil.Connect(ClusterId, clientId, natssUrl, logger.Sugar()); err != nil {
+	if _, err := stanutil.Connect(ClusterId, clientId, natssUrl, logger.Sugar(), func(_ error) {}); err != nil {
 		logger.Error("Connect() failed: ", zap.Error(err))
 		return nil, err
 	}
