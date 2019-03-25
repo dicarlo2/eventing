@@ -150,7 +150,7 @@ func (s *SubscriptionsSupervisor) connectWithRetry(stopCh <-chan struct{}) {
 			s.natssConnInProgress = false
 			s.natssConnMux.Unlock()
 
-			s.signalReconcile()
+			s.signalReconcile(stopCh)
 			return
 		}
 		s.logger.Sugar().Errorf("Connect() failed with error: %+v, retrying in %s", err, retryInterval.String())
@@ -163,7 +163,7 @@ func (s *SubscriptionsSupervisor) connectWithRetry(stopCh <-chan struct{}) {
 	}
 }
 
-func (s *SubscriptionsSupervisor) signalReconcile() {
+func (s *SubscriptionsSupervisor) signalReconcile(stopCh <-chan struct{}) {
 	s.subscriptionsMux.Lock()
 	defer s.subscriptionsMux.Unlock()
 
@@ -174,8 +174,13 @@ func (s *SubscriptionsSupervisor) signalReconcile() {
 	reconcilers := s.reconcilers
 	s.reconcilers = make(map[provisioners.ChannelReference]func())
 
-	// Run in a goroutine since signalling can block
+	// Run in a goroutine since signalling can block and we want to wait a few seconds
 	go func() {
+		select {
+		case <-time.After(time.Second * 1):
+		case <-stopCh:
+		}
+
 		for _, reconciler := range reconcilers {
 			reconciler()
 		}
@@ -189,10 +194,9 @@ func (s *SubscriptionsSupervisor) Connect(stopCh <-chan struct{}) {
 		case <-s.connect:
 			s.natssConnMux.Lock()
 			currentConnProgress := s.natssConnInProgress
-			s.natssConnMux.Unlock()
-			if !currentConnProgress {
-				// Case for lost connectivity, setting InProgress to true to prevent recursion
-				s.natssConnMux.Lock()
+			if currentConnProgress {
+				s.natssConnMux.Unlock()
+			} else {
 				s.natssConnInProgress = true
 				s.natssConnMux.Unlock()
 				go s.connectWithRetry(stopCh)
